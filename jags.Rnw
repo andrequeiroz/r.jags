@@ -1,0 +1,716 @@
+\documentclass[a4paper, 12pt]{article}
+\usepackage[left=2.5cm, top=2.5cm, right=2.5cm, bottom=2.5cm]{geometry}
+\usepackage[brazilian]{babel}
+\usepackage{amsmath, amsfonts, amssymb}
+\usepackage{helvet}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{fancyhdr}
+\usepackage{titling}
+\usepackage[hidelinks]{hyperref}
+\usepackage[onehalfspacing]{setspace}
+\usepackage[round, authoryear]{natbib}
+\usepackage{wasysym}
+\usepackage{graphicx}
+\usepackage[table]{xcolor}
+\usepackage{icomma}
+\usepackage[perpage]{footmisc}
+\usepackage{multicol}
+
+\title{Introdução à Inferência Bayesiana em R usando JAGS}
+\author{André Silva de Queiroz\thanks{Mestrando em Estatística pela Universidade de Brasília sob a orientação da Prof.ª Cibele Queiroz da Silva, Ph.D. E-mail para contato: \href{mailto:andrequeiroz@live.com}{andrequeiroz@live.com}.}}
+\date{Brasília, 25 de novembro de 2015}
+
+\renewcommand{\familydefault}{\sfdefault}
+
+\usepackage{sansmath}
+\sansmath
+
+\setlength{\headheight}{0.6cm}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\thetitle}
+\fancyhead[R]{\thepage}
+\renewcommand{\headrulewidth}{0.03cm}
+
+\setcounter{tocdepth}{2}
+
+\setlength{\parskip}{0.4\baselineskip}
+
+\ifdefined\knitrout
+  \renewenvironment{knitrout}{
+    \vspace{-1\baselineskip}\setlength{\parskip}{-0.2cm}\singlespacing
+  }{
+    \vspace{-0.6\baselineskip}
+  }
+\else
+\fi
+
+<<setup, include = FALSE>>=
+library(knitr)
+library(DBI)
+library(R2jags)
+
+opts_chunk$set(comment = NA, fig.align = "center", fig.width = 5,
+               fig.height = 3.2, crop = TRUE, dev = "pdf",
+               dev.args = list(pointsize = 10))
+knit_hooks$set(crop = hook_pdfcrop)
+options(OutDec = ",")
+
+link <- dbConnect(RSQLite::SQLite(), "./base/babynames.db")
+@
+
+\begin{document}
+
+\maketitle
+\thispagestyle{empty}
+\tableofcontents
+
+\newpage
+\section*{Introdução}
+
+A utilização da estatística Bayesiana como ferramenta prática de análise de dados foi alavancada pelo desenvolvimento computacional nas últimas décadas do século XX. Hoje, existem diversos programas computacionais que implementam os algoritmos de Monte Carlo em cadeia de Markov (MCMC, do inglês \textit{Markov chain Monte Carlo}) que permitem o uso da inferência Bayesiana nos mais diversos tipos de problemas. Os principais são o pacote \href{https://cran.r-project.org/web/packages/MCMCpack/index.html}{\texttt{MCMCpack}}, programado em R, o módulo \href{https://pymcmc.readthedocs.org/en/latest/}{PyMC} em Python, além dos programas independentes \href{http://mcmc-jags.sourceforge.net/}{JAGS}, \href{http://mc-stan.org/}{Stan} e \href{http://www.mrc-bsu.cam.ac.uk/software/bugs/the-bugs-project-winbugs/}{WinBUGS}.
+
+Nesse documento, não será apresentada a teoria que envolve a análise Bayesiana de dados, tão pouco o funcionamento do MCMC em si. A ideia aqui é mostrar passo a passo como utilizar uma ferramenta bastante flexível de análise Bayesiana, no caso o JAGS \citep{jags}, desde a sua instalação até a geração e análise dos resultados. Contudo, para alcançar esse objetivo, será apresentado também um breve guia de como utilizar o R \citep{r} em tarefas comuns. Para detalhes sobre a metodologia recomendo inicialmente \cite{sivia} e \cite{kruschke}; e no nível intermediário \cite{gelman}.
+
+\newpage
+\section{Primeiros Passos}
+
+O JAGS é uma implementação multiplataforma de algoritmos de simulação para a análise Bayesiana de modelos hierárquicos utilizando MCMC. JAGS é um acrônimo em inglês para \textit{\textbf{J}ust \textbf{A}nother \textbf{G}ibbs \textbf{S}ampler}. A sua escolha foi baseada em dois principais motivos. O primeiro é devido ao seu estágio contínuo de desenvolvimento. Isso faz do JAGS um \textit{software} em constante aprimoramento, seja na melhora da performance dos algoritmos ou na correção de falhas de implementação. O segundo motivo de sua escolha é graças à ótima interação com o R, através do pacote \verb=R2jags= \citep{R2jags-package}, que será demonstrada ao longo desse documento. Um outro motivo, não menos importante, é em relação ao direito de uso irrestrito sem a necessidade de aquisição de licença. O JAGS, como o R, é licenciado pela \textit{GNU General Public License}, sendo desse modo um \textit{software} livre.
+
+\subsection{Instalação}
+
+O processo de instalação envolve 2 etapas: a instalação do R e a instalação do JAGS, evidentemente. Os processos são indepententes, ou seja, instalar o JAGS antes ou depois do R não faz diferença alguma. Ambos os programas são multiplataforma, isso quer dizer que existem versões para Windows, Mac OS X e Linux. Todavia, a instalação será demonstrada apenas para os usuários em ambiente Windows, tendo em vista que essa é a plataforma mais recorrente. Usuários em outros sistemas não devem ter grandes dificuldades, já que trata-se de um processo bem simples.
+
+\subsubsection{R}
+
+\begin{itemize}
+
+\item Entre no \textit{site} \href{https://cran.r-project.org/}{\textcolor{blue}{https://cran.r-project.org/}} e clique em \textit{Download R for Windows}, como mostra a figura.
+
+  \includegraphics[scale=1]{img/cran1}
+
+\item Na página seguinte clique em \textit{base}.
+  
+  \includegraphics[scale=1]{img/cran2}
+
+\item Então clique em \textit{Download R 3.2.2 for Windows} para iniciar o \textit{download}.
+  
+  \includegraphics[scale=1]{img/cran3}
+
+\item Após o término do \textit{download} execute o arquivo baixado e instale o programa. As configurações padrão de instalação atendem perfeitamente o uso típico do R. Então, siga clicando em ``próximo''. Apenas certifique-se de que seja adicionado um ícone do programa à área de trabalho, como mostra a próxima figura.
+  
+  \includegraphics[scale=1]{img/icone}
+  
+\item Pronto! O R foi instalado com sucesso. Atualmente ele está na versão 3.2.2 (\textit{Fire Safety}).
+  
+\end{itemize}
+
+\subsubsection{JAGS}
+
+\begin{itemize}
+  
+  \item Entre no \textit{site} \href{http://sourceforge.net/projects/mcmc-jags/files/}{\textcolor{blue}{http://sourceforge.net/projects/mcmc-jags/files/}} e baixe o arquivo indicado pelo caminho na figura.
+    
+    \includegraphics[scale=1]{img/jags_dl}
+    
+  \item Quando o \textit{download} chegar ao fim, execute o arquivo baixado e instale o programa. Nessa etapa também não há complicações. Clique em ``\textit{next}'' até o fim e aguarde a finalização da instalação.
+    
+  \item Pronto! O JAGS está instalado, sua versão mais atual é a recente 4.0.0.
+  
+\end{itemize}
+
+\subsection{Interface do JAGS com o R}\label{subsec:R2jags}
+
+O JAGS se comunica com R através da biblioteca\footnote{De uma forma simplificada, em R, uma biblioteca, ou pacote, é um conjunto de códigos disponibilizados de uma maneira padronizada para facilitar o compartilhamento de programas.} \verb=R2jags=. Porém ela não vem instalada na versão básica do programa.
+
+A instalação de bibliotecas no R é um processo fácil, e que pode ser feito pelo menos de duas maneiras distintas. O modo mais geral e preferível de se instalar pacotes é abrir o programa e digitar no console:
+
+<<r2jags, eval = FALSE>>=
+install.packages("R2jags")
+@
+
+Esse comando irá instalar a biblioteca selecionada e todas as suas dependências. Eventualmente, abrirá uma janela para a seleção do repositório de onde os arquivos serão baixados. Escolha um repositório qualquer (levando em consideração que são desejáveis aqueles fisicamente mais pertos).
+
+A outra opção é atráves do método ``\textit{point \& click}''. Na versão recém instalada, por exemplo, basta ir ao menu ``Pacotes'' e depois clique em ``Instalar pacote(s)...''. Se for solicitado, selecione novamente o repositório. Então surgirá uma lista com todas as bibliotecas disponíveis. Escolha o pacote \verb=R2jags= e clique ``Ok''.
+
+Independente do método, instalar um pacote que porventura já esteja presente no sistema implicará apenas na reinstalação de sua versão mais recente. Para manter \textbf{todas as bibliotecas instaladas} atualizadas, mantenha o hábito de abrir o programa e digitar diretamente no console:
+
+<<update, eval = FALSE>>=
+update.packages(ask = FALSE)
+@
+
+Esse comando verifica a situação de todos os pacotes disponíveis no sistema e então baixa e instala automaticamente as atualizações necessárias. O parâmetro \verb+ask = FALSE+ é opcional, ele indica que sempre que uma versão mais nova de uma biblioteca estiver disponível, ela será instalada \textbf{sem} a necessidade de confirmação do usuário.
+
+\newpage
+\section{Utilizando o R}
+
+O R é uma linguagem de programação desenvolvida inicialmente para fins estatísticos. Porém, hoje ela apresenta uma infinidade de possibilidades que a permitem ser classificada como uma linguagem de multiuso. Naturalmente, o seu foco principal permanece na implementação de técnicas estatísticas para diversos finalidades.
+
+O R é uma linguagem interpretada, pois ao entrar na plataforma de programação, o usuário inicia um processo interativo onde são digitados os comandos linha a linha e a resposta é obtida de imediato. Por isso mesmo, é totalmente recomendável que o usuário não digite os comandos diretamente no console, mas adote a prática de programar a partir de \textit{scripts}, que são arquivos de texto que salvam os códigos em R e facilitam o desenvolvimento e reprodução do programa.
+
+Entre no R a partir do ícone\footnote{Pode ser que tenham sido criados dois ícones. Isso acontece se o sistema for de 64 bits. Um ícone se refere à versão 32 bits e outra a de 64 bits. Escolha a que achar conveniente.} na área de trabalho do computador. A sessão do R foi iniciada num programa chamado RGui, que não é o R propriamente dito. O RGui é um ambiente de desenvolvimento bem simples. Ele oferece alguns atalhos e uma ferramenta de editor de texto. Existem outros ambientes de desenvolvimento. Um, por exemplo, que tem ganhado bastante fama nos últimos anos é o \href{https://www.rstudio.com/}{Rstudio}, que pode ser facilmente baixado e instalado. Na minha opinião, a melhor ferramenta de desenvolvimento é chamada \href{https://www.gnu.org/software/emacs/}{Emacs}.
+
+Dentro do programa, abra um novo \textit{script} (na verdade, torne isso também um hábito, sempre programe através de \textit{scripts!}\footnote{Programar a partir de \textit{scripts} é altamente recomendável, porém também é importante manter um padrão de escrita da linguagem de programação para facilitar a utilização posterior do arquivo por você e outros usuários. A equipe de desenvolvedores do Google criou uma estilização padronizada do R que pode ser acessada em \href{https://google-styleguide.googlecode.com/svn/trunk/Rguide.xml}{\textcolor{blue}{https://google-styleguide.googlecode.com/svn/trunk/Rguide.xml}}. São poucas regras que ajudam bastante a manter o código limpo, bonito e organizado.}). Isso pode ser feito indo ao menu ``Arquivo'' e clicando em ``Novo script''. Agora você está pronto para começar.
+
+\subsection{Conceitos básicos}
+
+Tudo o que é manipulado em R pode ser salvo em objetos. Seja:
+
+\begin{equation}
+  X \sim N(0, 1).
+\end{equation}
+
+Como gerar uma amostra de 10 observações dessa distribuição em R? No \textit{script} recém aberto digite:
+
+<<x-normal>>=
+x <- rnorm(n = 10, mean = 0, sd = 1)
+@
+
+Bem, o R ainda não sabe que foi digitado esse comando. O código apenas faz parte de um arquivo de texto. Para enviar esse comando à sessão do R, selecione a linha e tecle \textbf{Ctrl + r}. O comando então será reproduzido no console como foi digitado. Agora o R gerou uma amostra de 10 observações da distribuição de $X$ e salvou num vetor \verb=x=. Apesar de ser solicitado que a linha fosse \textbf{selecionada} no \textit{script}, isso não é bem necessário. Basta que o cursor do editor de texto esteja posicionado em \textbf{qualquer lugar} dessa linha. Para conferir, volte o cursor para a linha digitada no \textit{script} e tecle \textbf{Ctrl + r}.
+
+O comando digitado, \verb=rnorm()=, é uma função, assim como todos os objetos seguidos de parêntesis no R. Ela gera amostras aleatórias da distribuição normal segundo três parâmetros: \verb=n= (o tamanho da amostra), \verb=mean= (a média) e \verb=sd= (o desvio padrão). Apesar de explícitos no exemplo, o nome dos parâmetros podiam ser omitidos. Assim, o comando
+
+<<x-norma-simples>>=
+x <- rnorm(10, 0, 1)
+@
+%
+é equivalente ao anterior.
+
+E quais foram os valores gerados? Digite e execute\footnote{Para evitar a redundância ao longo do documento, desse ponto em diante, digite e execute significará digite no \textit{script} e tecle \textbf{Ctrl + r} com o cursor sob a linha digitada.}:
+
+<<print-x>>=
+print(x)
+@
+%
+ou apenas:
+<<print-x-simples>>=
+x
+@
+
+Quando um objeto, no caso \verb=x=, é passado isoladamente para a linha de comando, o R invoca implicitamente a função \verb=print()=, que é imprimir na tela do computador.
+
+Digite e execute:
+<<estatisticas-x, collapse = TRUE>>=
+mean(x)  # média
+sd(x)  # desvio padrão
+@
+
+As funções \verb=mean()= e \verb=sd()= retornam a média e o desvio padrão, respectivamente, de um conjunto de dados. Uma coisa que elas têm em comum é que ambas são aplicadas ao vetor \verb=x= e retornam um único valor, a estatística calculada.
+
+Além dessas funções, nesse bloco de comando foi apresentado algo novo. O símbolo \# em R é um indicador de comentários. Qualquer coisa escrita após o \# até o fim da linha será ignorada pelo interpretador do R. Use-o sempre, com bom senso, para comentar o \textit{script} com lembretes, dicas, ou qualquer outra coisa que facilite o entendimento e/ou a leitura futura do arquivo.
+
+Algumas funções são aplicadas elemento a elemento num vetor, executando uma transformação nos dados. Digite e execute:
+
+<<trans-x>>=
+abs(x)  # calcula o valor absoluto dos elementos
+sqrt(abs(x))  # calcula a raiz quadrada do valor absoluto dos elementos
+@
+
+O resultado dessas funções inclusive podem alimentar outra função, como no segundo exemplo onde inicialmente é aplicada a função ``valor absoluto'' e então é calculada a raiz quadrada desses valores. Outros exemplos de funções matemáticas úteis implementadas em R são:
+
+\begin{multicols}{2}
+  \begin{itemize}
+    \item $f(x) = e^x \rightarrow \verb=exp()=$;
+    \item $f(x) = \ln{x} \rightarrow \verb=log()=$.
+    \item $f(x) = x! \rightarrow \verb=factorial()=$;
+  \end{itemize}
+\end{multicols}
+
+Operações como somar, subtrair, multiplicar, dividir ou elevar os valores a uma potência podem ser feitas diretamente através dos operadores \verb=+=, \verb=-=, \verb=*=, \verb=/= e \verb=**=, respectivamente. Por exemplo, digite e execute:
+
+<<trans-x-simples>>=
+4 + x  # adiciona 4 a x
+2 * x  # multiplica x por 2
+x / 7  # divide x por 7
+x ** 3  # eleva x ao cubo
+@
+
+Seja agora uma amostra de 1.000 elementos de $X$.
+
+<<x-1000>>=
+x <- rnorm(1000)
+@
+
+Os valores da média e da variância foram omitidos, pois \verb=mean= = 0 e \verb=sd= = 1 são os valores padrão da função \verb=rnorm()=. Digite e execute:
+
+<<summary-x>>=
+summary(x)
+@
+
+A função \verb=summary()= na verdade é um \textbf{método} em R. Simplificando, ela tem um comportamento diferente dependendo do tipo de objeto ao qual ela é aplicada. Como \verb=x= é um vetor de dados, ela mostra as principais estatísticas desses dados, como média, mediana, mínimo e máximo. Ela aparecerá em outros contextos com um comportamento distinto.
+
+\subsection{Gráficos}\label{subsec:graficos}
+
+Um dos pontos fortes do R é a incrível versatilidade em relação a representação visual dos dados. Existem muitas bibliotecas que produzem uma enorme variedade de gráficos. Nesse documento serão apresentados algumas maneiras de produzir gráficos com a biblioteca padrão do R para essa finalidade, \verb=graphics=. Esse pacote já vem na instalação básica do programa e é carregado automaticamente sempre que o R inicia uma sessão.
+
+O R possui internamente algumas bases de dados para fins didáticos. Uma delas é a base de dados \verb=cars=. Ela é carregada num objeto do tipo \verb=data.frame=. Digite e execute:
+
+<<head-cars>>=
+head(cars)
+@
+
+A variável \verb=speed= é a velocidade do carro em milhas por hora e a variável \verb=dist= é a distância em pés percorrida até a frenagem.
+
+A função \verb=head()= retorna, por padrão, os primeiros 6 elementos de um objeto como um vetor ou \verb=data.frame=. Essa quantidade de valores retornados pode ser alterada acrescentando-se à função o parâmetro \verb+n = c+, onde \verb=c= é igual ao número de elementos desejados. Experimente retornar as 20 primeiras observações da base \verb=cars=, por exemplo.
+
+E se for necessário retornar os últimos elementos ao invés dos primeiros? A função \verb=tail()= é a solução e sua utilização é idêntica a da função \verb=head()= apresentada.
+
+As funções \verb=head()= e \verb=tail()= são muito úteis, pois é comum existirem bases de dados com milhares de observações. Assim, imprimir a base toda no console do R irá somente gerar poluição visual e dificilmente agregará alguma informação relevante.
+
+Agora, digite e execute:
+
+<<cars>>=
+summary(cars)
+@
+
+O resultado da função \verb=summary()= mostra que a velocidade média dos carros é \Sexpr{mean(cars$speed)} mph e a distância média de frenagem é \Sexpr{mean(cars$dist)} ft. A primeira coisa a ser feita é levar esses dados para uma escala mais popular no Brasil. Antes ``clone'' esse banco de dados para um outro objeto no R. Digite e execute:
+
+<<clone-cars>>=
+# esse comando clona a base dados cars num novo objeto chamado carros
+carros <- cars
+@
+
+Para converter a velocidade de milhas por hora em kilometros por hora é necessário multiplicar o valor original por $1,6093$. Já a conversão da distância em pés para metros é possível multiplicando o valor original por $0,3048$. No R, digite e execute:
+
+<<trans-cars>>=
+carros <- transform(carros, speed = 1.6093 * speed, dist = 0.3048 * dist)
+@
+
+A função \verb=transform()=, como o nome sugere, transforma as variáveis dentro de um banco de dados. Nesse caso, não há problemas em sobrescrever os dados originais, porém nem sempre isso é uma boa prática. Para salvar os dados transformados numa nova variável dentro desse mesmo \verb=data.frame= defina a variável de destino com um novo nome que não exista na base de dados. Por exemplo, para calcular também a distancia de frenagem em kilometros, digite e execute:
+
+<<km-cars>>=
+carros <- transform(carros, dist.km = dist / 1000)
+@
+
+Nesse caso, a variável \verb=dist.km= recebeu os valores da variável \verb=dist= divididos por 1000, transformando assim metros em kilometros.
+
+A função \verb=summary()= traz as estatísticas para os dados transformados.
+
+<<summary-trans-cars>>=
+summary(carros)
+@
+
+A velocidade média dos carros é de \Sexpr{round(mean(carros$speed), 1)} km/h e a distância de frenagem média é de \Sexpr{round(mean(carros$dist), 2)} m.
+
+Lembre-se que o tema principal são os gráficos. Uma visualização que naturalmente vem à mente é o gráfico de dispersão. Digite e execute:
+
+<<plot-cars1>>=
+plot(dist ~ speed, data = carros)
+@
+
+Essa é a execução e o resultado mais simples da função \verb=plot()=, que também, na verdade, é um método em R. Ao lado esquerdo de $\sim$ está a variável a ser representada no eixo y, e ao lado direito está a variável do eixo x. Existem muitas maneiras de personalizar esse gráfico. Isso é feito a partir de parâmetros opcionais. Digite e execute:
+
+<<plot-cars2>>=
+plot(dist ~ speed, data = carros, pch = 20, col = "blue",
+     xlab = "Velocidade do carro (km/h)",
+     ylab = "Distância de frenagem (m)",
+     main = "Velocidade do carro x Distância de frenagem")
+@
+
+O parâmetro \verb=pch= recebe um número inteiro e representa o símbolo a ser impresso no gráfico. O número 1 (padrão) são aquelas bolinhas vazias vistas no primeiro gráfico. O número 4 são marcas em formato de x. O número 20, na figura, são bolinhas preenchidas. Teste qualquer número inteiro (até o 127, pelo menos). Cada valor produz um símbolo diferente.
+
+O parâmetro \verb=col=, como aparenta, é a cor do símbolo. São aceitos os nomes das cores em inglês, números inteiros, e se for necessária uma cor bem particular, ela pode ser definida a partir do seu código hexadecimal. Por exemplo, a cor \textit{Sienna} é definida pelo seu código A0522D, para representar essa cor no gráfico, troque o \textit{blue} por \textit{\#A0522D}.
+
+Os parâmetros \verb=xlab=, \verb=ylab= e \verb=main= definem os títulos do eixo x, do eixo y e o título principal, respectivamente.
+
+Para uma lista extensa de possíveis personalizações, digite no terminal do R \verb=?par=. Qualquer função do R digitada no terminal precedida pelo ponto de interrogação abre a documentação completa sobre aquela função. Ler essa documentação é a melhor maneira para se aprender recursos novos e diferentes sobre qualquer função do R.
+
+Um gráfico bastante tradicional é o histograma. A biblioteca \verb=graphics= possui uma função dedicada para esse tipo de representação. Digite e execute:
+
+<<hist-speed>>=
+hist(carros$speed)
+@
+
+O único parâmetro necessário da função \verb=hist()= é a própria série de dados. Os valores da variável \verb=speed=, ou qualquer variável num \verb=data.frame=, podem ser acessados através do operador \$, como no comando anterior.
+
+Os parâmetros opcionais que personalizam o gráfico de dispersão funcionam de forma semelhante no histograma. Dessa vez, digite e execute:
+
+<<hist-personalizado>>=
+hist(carros$speed, freq = FALSE, col = "green",
+     xlab = "Velocidade do carro (km/h)", ylab = "Densidade",
+     main = "Histograma da velocidade do carro")
+@
+
+A mudança mais importante, porém pouco perceptiva à primeira vista, é na escala do gráfico. Por padrão, os histogramas são construídos com base nas frequências \textbf{absolutas} das observações. Então o parâmetro \verb+freq = FALSE+ indica que o gráfico deve ser construído a partir das frequências \textbf{relativas} dos dados.
+
+Os parâmetros \verb=col=, \verb=xlab=, \verb=ylab= e \verb=main= têm a mesma função descrita anteriormente na contrução do gráfico de dispersão.
+
+Um efeito interessante e que deixa o aspecto do gráfico mais leve é obtido por meio do parâmetro \verb=density=. Digite e execute:
+
+<<hist-density>>=
+hist(carros$speed, freq = FALSE, col = "green", density = 33,
+     border = "black", xlab = "Velocidade do carro (km/h)",
+     ylab = "Densidade", main = "Histograma da velocidade do carro")
+@
+
+O parâmetro \verb=density= cria um padrão de preenchimento no gráfico de modo que o valor igual a cem cria uma figura totalmente colorida e zero uma figura sem cores. No exemplo, o valor igual 33 equivale a um padrão de cores correspondente a aproximadamente um terço preenchido. Há também um novo parâmetro, \verb=border=. Ele determina a cor da borda do histograma.
+
+O pacote \verb=graphics= permite fazer gráficos de barras, linhas, polígonos e curvas, apenas citando alguns exemplos. Entretanto para ter uma ideia do verdadeiro poder do R nesse quesito recomendo \cite{ggplot2}. A biblioteca \href{http://ggplot2.org/}{\texttt{ggplot2}}, apresentada na referência anterior, possui uma curva de aprendizado maior, mas os resultados produzidos são extremamente recompensadores.
+
+\subsection{Lendo seus próprios dados}
+
+O R é estigmatizado por muitos como um \textit{software} que não é bom quando o assunto são grandes bases de dados. Isso não é verdade. A razão principal é que o R nem se propõe a ser um gerenciador de banco de dados. Para essa função já existem programas exclusivos com essa finalidade e que fazem o trabalho com bastante competência, como é o caso dos sistemas de gerenciamento de bases de dados relacionais (\href{https://www.mysql.com/}{MySQL}, \href{http://www.postgresql.org/}{PostgreSQL}, \href{https://www.sqlite.org/}{SQLite}, e etc). Apesar da utilização desses sistemas em conjunto com o R fugirem ao escopo desse documento, o ponto fundamental aqui é destacar que o fluxo de trabalho com o R consiste em ler os dados de uma fonte externa e então prosseguir com as análises estatísticas.
+
+Uma das formas mais comuns de armazenamento de dados para leitura em R são arquivos de texto, e também essa é uma das maneiras mais práticas de se disponibilizar dados publicamente.
+
+A Administração de Seguridade Social dos Estados Unidos disponibiliza a contagem de nomes de bebês registrados anualmente em seu território. O arquivo compactado encontra-se em \href{https://www.ssa.gov/oact/babynames/names.zip}{\textcolor{blue}{https://www.ssa.gov/oact/babynames/names.zip}}. Ele possui diversos documentos de texto nomeados ``yobAAAA.txt'' onde AAAA é o ano de registro. Cada um deles possui três colunas (separadas por vígulas): o nome de registro, o sexo do bebê e a quantidade de registros. Ele pode ser baixado e os documentos extraídos numa pasta qualquer, porém os próximos passos darão ênfase como tudo pode ser feito no R, evidênciando sua característica de linguagem multiuso. Digite e execute:
+
+<<tempfile, eval = FALSE>>=
+temp <- tempfile()
+@
+
+A função \verb=tempfile()= retorna um nome que pode ser utilizado como um arquivo temporário pelo sistema, no caso, o arquivo compactado com as bases de dados anuais. Agora, digite e execute:
+
+<<download, eval = FALSE>>=
+download.file("https://www.ssa.gov/oact/babynames/names.zip", temp)
+@
+
+O arquivo \verb=names.zip= é baixado através da função \verb=download.file()=\footnote{Essa função requer acesso à Internet e o tempo de execução varia conforme a velocidade de conexão.} que o salva no arquivo temporário, \verb=temp=, criado no passo anterior. Para ler os dados de 1980, digite e execute:
+
+<<registros-1980, eval = FALSE>>=
+conexao <- unz(temp, "yob1980.txt")
+registros <- cbind(1980, read.table(conexao, sep = ","))
+@
+
+A função \verb=unz()= cria uma conexão virtual com o arquivo \verb=yob1980.txt=. Então, a função \verb=read.table()= lê os dados através dessa conexão e salva numa base de dados denominada \verb=registros=. A função \verb=cbind()= adiciona uma coluna com a constante 1980, que é o ano da base.
+
+Se o arquivo \verb=names.zip= foi baixado diretamente pelo navegador de Internet e depois descompactado para alguma pasta qualquer no computador, então digite e execute:
+
+<<registros-manual, eval = FALSE>>=
+registros <- cbind(1980, read.table(file.choose(), sep = ","))
+@
+
+Após a execução do comando acima, uma janela (resultante da chamada da função \verb=file.choose()=) será aberta e o aquivo \verb=yob1980.txt= deve ser selecionado.
+
+Como o arquivo original não tem a informação do nome das colunas, o R criou nomes automáticos para as variáveis no \verb=data.frame=. Esses nomes devem ser editados manualmente para facilitar o trabalho com a base. Digite e execute:
+
+<<registros-nomes-cols, eval = FALSE>>=
+names(registros) <- c("ano", "nome", "sexo", "contagem")
+@
+
+<<registros-1980-real, include = FALSE>>=
+registros <- dbGetQuery(link, "SELECT * FROM names WHERE ano == 1980")
+@
+
+Para saber se deu tudo certo, digite e execute:
+
+<<registros-head>>=
+head(registros)
+@
+
+Como pode ser observado, \Sexpr{registros[1, "nome"]} é o nome feminino com o maior número de registros em 1980 nos Estados Unidos\footnote{É possível afirmar isso, pois a base já vem em ordem decrescente.}. E em relação aos meninos? Primeiro, digite e execute:
+
+<<tabela-sexos>>=
+table(registros$sexo)
+@
+
+A função \verb=table()= tabula os dados e mostra que há duas categorias da variável \verb=sexo=:  F - \textit{female} e M - \textit{male} (do inglês, feminino e masculino, respectivamente). Então, para obter a base apenas com os registros masculinos, digite e execute:
+
+<<registros-meninos>>=
+meninos <- subset(registros, sexo == "M")
+@
+
+A função \verb=subset()= claramente retorna apenas os registros com sexo igual a \verb=M= da base original. O operador \verb+==+ corresponde ao igual comparativo no R. Os primeiros 10 registros dessa nova base são:
+
+<<ordem-meninos>>=
+head(meninos, n = 10)
+@
+
+O número à esquerda se refere à linha de registro na base original. Mesmo depois da divisão da base em categorias, essa informação inicial permanece inalterada.
+
+A etapa seguinte consiste em ler o conjunto de documentos de texto de 1981 a 2014 de forma sistemática. O R é uma linguagem de programação, e portanto possui ferramentas que permitem a execução de comandos de forma estruturada. Uma dessas ferramentas é o laço de repetição (mais popularmente conhecido como \textit{loop}). Para ler os registros usando um laço, digite e execute:
+
+<<registros-loop, eval = FALSE>>=
+for (i in 1981:2014) {
+    conexao <- unz(temp, paste("yob", i, ".txt", sep = ""))
+    base <- setNames(cbind(i, read.table(conexao, sep = ",")),
+                     names(registros))
+    registros <- rbind(registros, base)
+}
+unlink(temp)
+@
+
+O laço é iniciado em \verb+i = 1981+ e segue até \verb+i = 2014+. Em cada iteração, a conexão com a base do respectivo ano é criada por meio da função \verb=unz()=, então os dados são lidos numa base temporária (chamada aqui de \verb=base=). Como os documentos não possuem a informação do ano de referência, esse dado é inserido novamente pela função \verb=cbind()= em cada rodada. A função \verb=setNames()= salva na base temporária os nomes das variáveis provenientes da base principal (\verb=registros=). Em seguida, a base temporária é adicionada à base principal através da função \verb=rbind()=. Por fim, a função \verb=unlink()= libera o arquivo temporário da memória do computador.
+
+Se o arquivo foi baixado diretamente do \textit{link} fornecido e o seu conteúdo extraído para uma pasta no computador, a leitura dos dados pode ser feita por meio dos comandos:
+
+<<registros-manual-loop, eval = FALSE>>=
+setwd(choose.dir())
+for (i in 1981:2014) {
+    arquivo <- paste("yob", i, ".txt", sep = "")
+    base <- setNames(cbind(i, read.table(arquivo, sep = ",")),
+                     names(registros))
+    registros <- rbind(registros, base)
+}
+@
+
+A função \verb=setwd()= determina a pasta de trabalho do R, e a função \verb=choose.dir()= abre uma janela onde deve ser selecionada a pasta onde os arquivos de texto foram descompactados.
+
+<<registros-real-loop, include = FALSE>>=
+registros <- dbGetQuery(link, "SELECT * FROM names")
+@
+
+Feito isso, a base de dados foi carregada na memória RAM do sistema e está pronta para ser analisada.
+
+\newpage
+Para saber se tudo funcionou como o esperado, digite e execute:
+
+<<joao>>=
+nome <- subset(registros, sexo == "M" & nome == "John")
+plot(contagem ~ ano, data = nome, type = "l", xlab = "Ano",
+     ylab = "Registros", main = "Nome masculino: John")
+@
+
+Pelo visto, o nome masculino ``John'' tem perdido popularidade a cada ano que passa nos Estados Unidos. Um último exemplo, mudando apenas os parâmetros da função \verb=subset()=, digite e execute:
+
+<<nome-fem>>=
+nome <- subset(registros, sexo == "F" & nome == "Trinity")
+plot(contagem ~ ano, data = nome, type = "l", xlab = "Ano",
+     ylab = "Registros", main = "Nome feminino: Trinity")
+@
+
+\newpage
+\section{Utilizando o JAGS via R}
+
+A seção anterior introduziu, direta ou indiretamente, alguns conceitos básicos de utilização do R que serão necessários para a execução de análises Bayesianas utilizando a dupla R/JAGS. A familiarização com os comandos em R promovida pelos exemplos até agora, também, serão importantes para facilitar o entendimento do JAGS, pois ambos os programas possuem uma sintaxe bem parecida.
+
+Com a finalidade de facilitar a apresentação do uso do JAGS, o conteúdo dessa seção será introduzido através da implementação de um modelo linear simples. A base de dados \verb=carros=, apresentada na subseção \ref{subsec:graficos}, será de novo objeto de estudo.
+
+\subsection{Definição do modelo}
+
+Seja o modelo a ser estudado:
+%
+\begin{equation}
+  y_i = \alpha + \beta x_i + \varepsilon_i, \label{eq:modelo_linear}
+\end{equation}
+%
+onde $y_i$ é a variável dependente, $x_i$ a variável independente, $\alpha$ e $\beta$ são parâmetros a serem estimados, $\varepsilon_i$ é um erro gaussiano e independente e $i = 1, \ldots, n$ é o índice que caracteriza os $n$ elementos da amostra.
+
+A recapitulação do gráfico de dispersão sugere que talvez não seja uma má ideia ajustar um modelo desse tipo aos dados.
+
+<<plot-cars3>>=
+plot(dist ~ speed, data = carros, pch = 20,
+     xlab = "Velocidade do carro (km/h)",
+     ylab = "Distância de frenagem (m)",
+     main = "Velocidade do carro x Distância de frenagem")
+@
+
+O modelo linear sugerido é estimado de forma bem simples no R através da função \verb=lm()=. Digite e execute:
+
+<<modelo-linear-r>>=
+modelo <- lm(dist ~ speed, data = carros)
+@
+
+A função \verb=lm()= calculou as estimativas dos parâmetros do modelo:
+%
+\begin{equation}
+  \texttt{dist}_i = \alpha + \beta * \texttt{speed}_i + \varepsilon_i,
+\end{equation}
+%
+e salvou todas as informações relevantes no objeto \verb=modelo=. A função \verb=summary()= apresenta de forma sintetizada algumas dessas informações. Digite e execute:
+
+<<modelo-summary>>=
+summary(modelo)
+@
+
+Os valores estimados dos parâmetros foram: $\alpha = \Sexpr{round(modelo$coefficients, 4)[1]}$ e $\beta = \Sexpr{round(modelo$coefficients, 4)[2]}$, ambos significativos ao nível de 5\%. Os intervalos de 95\% de confiança dos parâmetros podem ser calculados também diretamente. Digite e execute:
+
+<<modelo-confint>>=
+confint(modelo)
+@
+
+\subsection{Definição do modelo Bayesiano}
+
+O modelo \eqref{eq:modelo_linear} é reescrito de forma Bayesiana como:
+%
+\begin{align}
+  y_i &= \alpha + \beta x_i + \varepsilon_i, \notag \\
+  \alpha &\sim N(\mu_\alpha, \sigma^2_\alpha), \label{eq:modelo_linear_jags} \\
+  \beta &\sim N(\mu_\beta, \sigma^2_\beta). \notag
+\end{align}
+%
+onde $\varepsilon_i \sim N(0, \sigma^2)$. Matemáticamente é um modelo bastante similar ao modelo linear simples, porém o paradigma Bayesiano assume que os parâmetros $\alpha$ e $\beta$ são variáveis aleatórias. Dessa maneira, suas distribuições \textit{a priori} são, nesse caso, duas distribuições normais independentes com hiperparâmetros conhecidos.
+
+Antes de partir para a codificação do modelo, digite e execute:
+
+<<biblioteca, eval = FALSE>>=
+library(R2jags)
+@
+
+Se a instalação do JAGS foi feita corretamente, ao chamar a biblioteca com o comando anterior, o R encontrou uma versão compatível do JAGS instalada no sistema que está agora disponível na sessão atual do R.
+
+O modelo escrito na linguagem do JAGS é da seguinte forma:
+
+<<modelo-linear-jags>>=
+lm.jags <- function() {
+
+    # verossimilhança
+    for (i in 1:50) {
+        y[i] ~ dnorm(alpha + beta * x[i], 1 / sigma2)
+    }
+
+    # prioris
+    alpha ~ dnorm(0, 0.01)
+    beta ~ dnorm(0, 0.01)
+    sigma2 ~ dgamma(2, 0.5)
+}
+@
+
+Para o R ler o modelo, ele deve ser programado dentro de uma função, por isso o uso da função \verb=function()= na primeira linha.
+
+O primeiro bloco é a parte da verossimilhança. Um laço é escrito varrendo os 50 elementos da amostra através da distribuição condicional $(y_i | \alpha, \beta, x_i) \sim N(\alpha + \beta x_i, \sigma^2)$. Um detalhe importante aqui é que a implementação da distribuição normal em JAGS é feita com o \textbf{inverso da variância}, por isso o termo \verb=1 / sigma2= no código.
+
+O segundo e último bloco contém as especificações das distribuições \textit{a priori} dos parâmetros $\alpha$ e $\beta$, além da distribuição \textit{a priori} de $\sigma^2$. Em todos os casos foram tomadas distribuições não informativas.
+
+A próxima etapa é definir o conjunto de dados a ser lido pela JAGS. Os valores devem ser transmitidos por meio de uma lista\footnote{Em R, uma lista é um objeto específico criado pela função \texttt{list()}.} de valores.
+
+<<dados-linear-jags>>=
+dados.jags <- list(y = carros$dist, x = carros$speed)
+@
+
+A partir desses elementos é possível ajustar o modelo \eqref{eq:modelo_linear_jags}. Digite e execute:
+
+<<rodada-jags, eval = FALSE>>=
+modelo.jags <- jags(data = dados.jags, model.file = lm.jags,
+                    parameters.to.save = c("alpha", "beta"), n.chains = 1,
+                    n.iter = 15000, n.burnin = 5000, n.thin = 10)
+@
+
+A função \verb=jags()= gera observações das distribuições \textit{a posteriori} de $\alpha$ e $\beta$. Para observar os resultados sintetizados, digite e execute:
+
+<<rodadas-jags-real, include = FALSE>>=
+modelo.jags <- jags(data = dados.jags, model.file = "./jags/lm.jags",
+                    parameters.to.save = c("alpha", "beta"), n.chains = 1,
+                    n.iter = 15000, n.burnin = 5000, n.thin = 10)
+@
+
+<<resultado-jags-linear>>=
+print(modelo.jags)
+@
+
+Os valores estimados estão na coluna \verb=mu.vect= e são bem próximos daqueles calculados pela função \verb=lm()=, que ajusta o modelo linear clássico.
+
+\newpage
+Para investigar a convergência dos parâmetros, digite e execute:
+
+<<traceplot-alpha>>=
+plot(modelo.jags$BUGSoutput$sims.list$alpha, type = "l",
+     ylab = expression(alpha), main = expression("Série de " * alpha))
+@
+
+Outro gráfico interessante é o histograma da distribuição dos valores gerados. Digite e execute:
+
+<<hist-alpha>>=
+hist(modelo.jags$BUGSoutput$sims.list$alpha, freq = FALSE,
+     xlab = expression(alpha), ylab = "Densidade",
+     main = expression("Histograma de " * alpha))
+@
+
+\newpage
+\subsection{Um exemplo aplicado}
+
+O seguinte exemplo foi inspirado em \cite{andreon}.
+
+O neutrino é uma partícula elementar sem carga e com a massa bem pequena, portanto é praticamente indetectável com os atuais instrumentos de medição. Um aparelho foi construído para medir a massa, $\mu$, do neutrino com erro instrumental conhecido de $3,3 \frac{\text{eV}}{\text{c}^2}$\footnote{A massa das partículas elementares são medidas a partir da equivalência massa-energia dada pela famosa equação $E = mc^2$.}, que é o desvio padrão esperado dos valores medidos.
+
+Apesar de muito pequena, foi postulada uma distribuição \textit{a priori} uniforme não informativa para a massa do neutrino, tal que:
+%
+\begin{equation}
+  \pi(\mu) = \text{U}(0, 33). \label{neutrino-prior}
+\end{equation}
+
+No R, essa distribuição pode ser visualizada através da função \verb=curve()=. Digite e execute:
+
+<<neutrino-prior>>=
+curve(dunif(x, min = 0, max = 33), from = 0, to = 33, col = 2,
+      xlab = expression(mu), ylab = "densidade", main = "priori")
+@
+
+A função \verb=curve()= recebe como parâmetro principal uma função qualquer, $f(x)$, no caso, \verb+dunif(x, min = 0, max = 33)+ que é a implementação em R da densidade uniforme definida em \eqref{neutrino-prior}.
+
+O valor medido da massa do neutrino num experimento foi de $-5,4 \frac{\text{eV}}{\text{c}^2}$! A distribuição da verossimilhaça dessa observação é dada por:
+%
+\begin{equation}
+  g(x | \mu) = \text{N}(\mu, 3,3^2). \label{neutrino-likelihood}
+\end{equation}
+
+A verossimilhança pode ser visualizada no R também através da função \verb=curve()=.
+
+<<neutrino-lh>>=
+curve(dnorm(-5.4, x, 3.3), from = -10, to = 10, col = 3,
+      xlab = expression(mu), ylab = "densidade", main = "verossimilhança")
+@
+
+Naturalmente, um número negativo não é um valor esperado para uma grandeza física como a massa. A inferência Bayesiana, entretanto, permite fazer inferências sobre a massa do neutrino, mesmo com essa observação atípica! É necessário determinar a distribuição \textit{a posteriori} da massa, $\mu$, do neutrino dada a observação $x$, tal que:
+%
+\begin{equation}
+  f(\mu | x) \propto g(x | \mu) \pi(\mu). \label{neutrino-bayes}
+\end{equation}
+
+É possível, utilizando o JAGS, obter amostras da distribuição \textit{a posteriori} definida em \eqref{neutrino-bayes}. O modelo implementado em JAGS é dado por:
+
+<<neutrino-modelo-jags>>=
+neutrino.jags <- function() {
+
+    # verossimilhança
+    x ~ dnorm(mu, 1 / 3.3 ** 2)
+
+    # priori
+    mu ~ dunif(0, 33)
+}
+@
+
+Basta definir as distribuições \textit{a priori} e de verossimilhança do modelo, conforme \eqref{neutrino-prior} e \eqref{neutrino-likelihood}. A observação deve ser definida num objeto do tipo \verb=list= do R. Assim, digite e execute:
+
+<<neutrino-data>>=
+dados.jags <- list(x = -5.4)
+@
+
+As estimações são feitas pela função \verb=jags()=, como na seção anterior.
+
+<<rodada-neutrino, eval = FALSE>>=
+modelo.jags <- jags(data = dados.jags, model.file = neutrino.jags,
+                    parameters.to.save = "mu", n.chains = 1,
+                    n.iter = 15000, n.burnin = 5000, n.thin = 10)
+@
+
+Foram realizadas 15.000 iterações. Para ver os resultados, digite e execute:
+
+<<rodadas-neutrino-real, include = FALSE>>=
+modelo.jags <- jags(data = dados.jags, model.file = "./jags/neutrino.jags",
+                    parameters.to.save = "mu", n.chains = 1,
+                    n.iter = 15000, n.burnin = 5000, n.thin = 10)
+m.jags <- as.numeric(modelo.jags$BUGSoutput$sims.list$m)
+@
+
+<<resultado-neutrino>>=
+print(modelo.jags)
+@
+
+A média \textit{a posteriori} de $\mu$ foi estimada em \Sexpr{round(mean(m.jags), 3)}$\frac{\text{eV}}{\text{c}^2}$.
+
+O objeto \verb=modelo.jags= é da classe \verb=rjags= e possui uma estrutura complexa. Para extrair a série de valores estimados da distribuição \textit{a posteriori} de $\mu$, digite e execute:
+
+<<mu-neutrino>>=
+mu.jags <- as.numeric(modelo.jags$BUGSoutput$sims.list$m)
+@
+
+Desse modo, é possível visualizar a distribuição \textit{a posteriori} da massa, $\mu$, do neutrino no R pela função \verb=hist()=. Digite e execute:
+
+<<neutrino-posterior>>=
+hist(mu.jags, col = 4, density = 33, border = "black",
+     xlab = expression(mu), ylab = "densidade", main = "posteriori")
+@
+
+Assim, a inferência Bayesiana, através do JAGS, resolve o problema de estimar a massa do neutrino.
+
+\newpage
+\bibliographystyle{apa}
+\bibliography{referencias}
+
+<<close, include = FALSE>>=
+dbDisconnect(link)
+@
+
+\end{document}

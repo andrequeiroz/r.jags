@@ -1,0 +1,8 @@
+model {
+  for (i in 1:50) {
+    y[i] ~ dnorm(alpha + beta * x[i], 1 / sigma2)
+  }
+  alpha ~ dnorm(0, 0.01)
+  beta ~ dnorm(0, 0.01)
+  sigma2 ~ dgamma(2, 0.5)
+}

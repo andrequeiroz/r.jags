@@ -1,0 +1,4 @@
+model {
+  x ~ dnorm(mu, 1 / 3.3 ** 2)
+  mu ~ dunif(0, 33)
+}
